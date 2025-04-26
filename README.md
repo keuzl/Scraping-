@@ -1,2 +1,2 @@
-# Scraping a Website
+
 Scraping the website "rekrute.com" using Python, BeautifulSoup, Sqlite...
