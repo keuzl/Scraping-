@@ -1,0 +1,98 @@
+import pandas as pd
+from bs4 import BeautifulSoup
+import requests
+import sqlite3
+
+annonce = []
+region = []
+entreprise = []
+date_pub = []
+num_poste = []
+secteur = []
+fonction = []
+experience = []
+diplome = []
+contrat = []
+url = []
+
+conn = sqlite3.connect('REKRUTE.db')
+c = conn.cursor()
+
+c.executescript(''' CREATE TABLE if not exists ENTREPRISE (
+                            Nom TEXT,
+                            Region TEXT,
+                            Secteur TEXT );
+
+                            CREATE TABLE POSTE (
+                            Nbre_Postes INTEGER,
+                            Type_Contrat TEXT );
+
+                            CREATE TABLE PROFIL (
+                            Diplome TEXT ,
+                            Experience TEXT );
+
+                            CREATE TABLE ANNONCE (
+                            Titre TEXT ,
+                            URL TEXT ,
+                            Date_Publication TEXT); ''')
+for page_num in range(1,4):
+    webpage = requests.get(f"https://www.rekrute.com/offres.html?p={page_num}&s=1&o=1&sectorId%5B0%5D=24")
+    soup = BeautifulSoup(webpage.text, 'html.parser')
+
+    annonces = soup.find_all('h2', {'style': 'width:90%'})
+    entreprises = soup.find_all('span', {'style': 'color: #5b5b5b;'})
+    num_postes = soup.find_all('em', {'class': 'date'})
+    ems = soup.find_all('em', {'class': 'date'})
+    uls = soup.find_all('ul', {'style': 'display: block;margin-top: -15px;'})
+
+    for i in range(len(annonces)):
+        annonce.append(annonces[i].text.strip())
+        region.append(annonces[i].text.split('|')[1].strip())
+        entreprise.append(entreprises[i].text.strip().split()[0].replace(':', ' '))
+        num_poste.append(num_postes[i].text.split(':')[-1].strip())
+
+        spans = ems[i].find_all('span')
+        date_pubs = spans[0].text
+
+        urls = annonces[i].find('a')
+        url.append(urls.get('href', '/'))
+
+        lis = uls[i].find_all('li')
+        secteurs = lis[0].text.split(':')[-1]
+        fonctions = lis[1].text.split(':')[-1].replace(' ', '')
+        experiences = lis[2].text.split(':')[-1]
+        diplomes = lis[3].text.split(':')[-1]
+        contrats = lis[4].text.split(':')[-1]
+
+        date_pub.append(date_pubs.strip())
+        secteur.append(secteurs.strip())
+        fonction.append(fonctions.strip())
+        experience.append(experiences.strip())
+        diplome.append(diplomes.strip())
+        contrat.append(contrats.strip())
+
+        c.execute("INSERT INTO ENTREPRISE VALUES(?,?,?)", (entreprise[i], region[i], secteur[i]))
+        c.execute("INSERT INTO POSTE VALUES(?,?)", (num_poste[i], contrat[i]))
+        c.execute("INSERT INTO PROFIL VALUES(?,?)", (diplome[i], experience[i]))
+        c.execute("INSERT INTO ANNONCE VALUES(?,?,?)", (annonce[i], url[i], date_pub[i]))
+
+
+
+conn.commit()
+c.close()
+conn.close()
+
+data = pd.DataFrame({
+    'ANNONCE': annonce,
+    'LINK': url,
+    'REGION': region,
+    'ENTREPRISE': entreprise,
+    'DATE PUBLICATION': date_pub,
+    'NOMBRE POSTE': num_poste,
+    'SECTEUR': secteur,
+    'FONCTION': fonction,
+    'EXPERIENCE': experience,
+    'DIPLOME': diplome,
+    'CONTRAT': contrat,
+})
+data.to_csv('data.csv')
